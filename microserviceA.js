@@ -24,17 +24,23 @@ app.use(raw({ type: '*/*' }));
 // app.use(express.json())                                            // To parse as json
 
 
+const routeMap = new Map([                                            // Map of route prefixes to their target URLs
+  ['/B', 'http://localhost:7000'],
+  ['/C', 'http://localhost:7001']
+]);
+
 
 app.use('*',                                                          // Route to intercept all incoming requests
   (req, res) => {
 
     // Decide the target dynamically based on the request URL
-    let target;                                                                 
-    if (req.originalUrl.startsWith('/B')) target = 'http://localhost:7000';
-    else if (req.originalUrl.startsWith('/C')) target = 'http://localhost:7001';
-    else return res.status(404).send('Invalid route');
-  
-   
+    const routePrefix = Array.from(routeMap.keys()).find(             // Find the prefix in the URL that matches a key in the map
+      prefix => req.originalUrl.startsWith(prefix));
+
+    if(!routePrefix) return res.status(404).send('Invalid Route');
+
+    
+    const target = routeMap.get(routePrefix);
     return proxy(target, {                                             // Proxy the request to the target microservice
 
       // To inspect or modify the body before sending it to the target (Optional)
