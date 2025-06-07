@@ -4,17 +4,35 @@ const express = require('express');
 const { raw } = require('body-parser');
 var proxy = require('express-http-proxy');
 const rateLimit = require('express-rate-limit'); 
+const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path');
 const app = express();
 const PORT = 3000;
 
 
-const limiter = rateLimit({                                           // Apply rate limiting to all requests
+// Apply rate limiting to all requests
+const limiter = rateLimit({                                           
   windowMs: 1 * 60 * 1000,                                            // 1 minute window
   max: 10,                                                            // limit each IP to 10 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
 });
-
 app.use(limiter);                                                     // APPLY RATE LIMITER
+
+
+// Logging setup
+const accessLogStream = fs.createWriteStream(                         // 1. Create a write stream for access logs
+  path.join(__dirname, 'access.log'),                                 // Log file in the same directory
+  { flags: 'a' }                                                      // 'a' means append mode
+);
+
+app.use(morgan('combined', { stream: accessLogStream }));             // 2. Use morgan to log standard request details
+
+app.use((req, res, next) => {                                         // 3. Custom logger for audit
+  console.log(`\n[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 
 
 // Middleware to parse the incoming request body as raw Buffer.
