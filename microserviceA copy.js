@@ -2,16 +2,16 @@
 // MicroserviceA.js - copy
 // Contains previous code which was tested - 
 
-const express = require('express');
-const { raw } = require('body-parser');
-var proxy = require('express-http-proxy');
-// const { createProxyMiddleware } = require('http-proxy-middleware');
+// const express = require('express');
+// const { raw } = require('body-parser');
+// var proxy = require('express-http-proxy');
+// // const { createProxyMiddleware } = require('http-proxy-middleware');
 
-const app = express();
-const PORT = 3000;
+// const app = express();
+// const PORT = 3000;
 
 
-app.use(raw({ type: '*/*' }));          // Using "raw",data is sent a Buffer
+// app.use(raw({ type: '*/*' }));          // Using "raw",data is sent a Buffer
 // app.use(express.json())              // parse as json
 
 
@@ -120,30 +120,123 @@ app.use(raw({ type: '*/*' }));          // Using "raw",data is sent a Buffer
 
 
 
-app.use('*', 
-  (req, res) => {
-    // Decide the target dynamically based on the request URL
-    let target;
+// app.use('*', 
+//   (req, res) => {
+//     // Decide the target dynamically based on the request URL
+//     let target;
 
-    if (req.originalUrl.startsWith('/B')) target = 'http://localhost:7000';
-    else if (req.originalUrl.startsWith('/C')) target = 'http://localhost:7001';
-    else return res.status(404).send('Invalid route');
+//     if (req.originalUrl.startsWith('/B')) target = 'http://localhost:7000';
+//     else if (req.originalUrl.startsWith('/C')) target = 'http://localhost:7001';
+//     else return res.status(404).send('Invalid route');
   
 
-    return proxy(target, {
+//     return proxy(target, {
+//       proxyReqBodyDecorator: (bodyContent, srcReq) => {
+//         console.log('Forwarding Body:', bodyContent);
+//         console.log('Type:', typeof bodyContent);
+//         return bodyContent;
+//       }
+//     }
+//   )(req, res); // <-- Important: return the middleware result
+// });
+
+
+// app.listen(PORT, () => {
+//   console.log(`Microservice A running at http://localhost:${PORT}`);
+// });
+
+
+
+
+
+
+/* Before integrting db */
+
+// Microservice A
+
+const express = require('express');
+const { raw } = require('body-parser');
+var proxy = require('express-http-proxy');
+const rateLimit = require('express-rate-limit'); 
+const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path');
+const app = express();
+const PORT = 3000;
+
+
+// Apply rate limiting to all requests
+const limiter = rateLimit({                                           
+  windowMs: 1 * 60 * 1000,                                            // 1 minute window
+  max: 10,                                                            // limit each IP to 10 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+});
+app.use(limiter);                                                     // APPLY RATE LIMITER
+
+
+// Logging setup
+const accessLogStream = fs.createWriteStream(                         // 1. Create a write stream for access logs
+  path.join(__dirname, 'access.log'),                                 // Log file in the same directory
+  { flags: 'a' }                                                      // 'a' means append mode
+);
+
+app.use(morgan('combined', { stream: accessLogStream }));             // 2. Use morgan to log standard request details
+
+app.use((req, res, next) => {                                         // 3. Custom logger for audit
+  console.log(`\n[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+
+
+// Middleware to parse the incoming request body as raw Buffer.
+// This is useful when forwarding data without modifying it
+app.use(raw({ type: '*/*' }));          
+
+// app.use(express.json())                                            // To parse as json
+
+
+const routeMap = new Map([                                            // Map of route prefixes to their target URLs
+  ['/B', 'http://localhost:7000'],
+  ['/C', 'http://localhost:7001']
+]);
+
+
+app.use('*',                                                          // Route to intercept all incoming requests
+  (req, res) => {
+
+    // Decide the target dynamically based on the request URL
+    const routePrefix = Array.from(routeMap.keys()).find(             // Find the prefix in the URL that matches a key in the map
+      prefix => req.originalUrl.startsWith(prefix));
+
+    if(!routePrefix) return res.status(404).send('Invalid Route');
+
+    
+    const target = routeMap.get(routePrefix);
+    return proxy(target, {                                             // Proxy the request to the target microservice
+
+      // To inspect or modify the body before sending it to the target (Optional)
       proxyReqBodyDecorator: (bodyContent, srcReq) => {
         console.log('Forwarding Body:', bodyContent);
         console.log('Type:', typeof bodyContent);
         return bodyContent;
       }
     }
-  )(req, res); // <-- Important: return the middleware result
+  )(req, res);                                                          // return the middleware result
 });
 
-
+// Start the server and listen on the defined port
 app.listen(PORT, () => {
   console.log(`Microservice A running at http://localhost:${PORT}`);
 });
+
+
+
+
+
+
+
+
 
 
 
