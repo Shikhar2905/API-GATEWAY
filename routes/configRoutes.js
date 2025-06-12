@@ -3,15 +3,49 @@
 const express = require('express');
 const router = express.Router();
 const serviceconfigs = require('../models/ServiceConfig');
+const redisClient = require('../redisClient');
 
 
 // GET all configs - without Redis
+/*
 router.get('/', async (req, res) => {
   try {
     const server_configuration = await serviceconfigs.find();
     res.json(server_configuration);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
+  }
+});
+*/
+
+
+// GET all configs using Redis
+router.get('/', async (req, res) => {
+  try {
+    console.time("FetchConfigs");
+
+    const cachedData = await redisClient.get('serviceconfigs');    //Try to get data from Redis cache
+    
+    if (cachedData) {
+      console.timeEnd("FetchConfigs");
+      console.log("Returned from Redis Cache");
+      return res.status(200).json(JSON.parse(cachedData));
+    }
+
+    //If not in cache, get from MongoDB
+    const server_configuration = await serviceconfigs.find();                   
+    await redisClient.setEx('serviceconfigs', 60, JSON.stringify(server_configuration));    //Set cache with 60s expiry
+    
+    // await redisClient.setEx('serviceconfigs', 60, server_configuration)                  // This line will give error as redis accepts onlu string and buffer values, not objects
+
+    console.timeEnd("FetchConfigs");
+    console.log("Returned from MongoDB");
+    return res.status(200).json(server_configuration);
+
+  } 
+  catch (err) {
+    console.error("Error:", err.message);
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
 
