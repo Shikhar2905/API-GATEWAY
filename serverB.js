@@ -1,14 +1,14 @@
-//Microservice C
 const express = require('express');
 const { raw } = require('body-parser');
 const app = express();
-const PORT = 7001;
+const PORT = 7000;
 
 app.use(raw({ type: '*/*' }));
 // app.use(express.json())
 
-app.all('*', (req, res) => {                                // Handle all incoming requests with any method (GET, POST, PUT, DELETE)
-  console.log(' Microservice C received request');          // Log basic metadata
+app.all('*', (req, res) => {                                     // Handle all incoming requests with any method (GET, POST, PUT, DELETE)
+
+  console.log('Server B received request');               // Log basic metadata
   console.log('Method:', req.method);
   console.log('Headers:', req.headers);
   console.log('Query Params:', req.query);
@@ -19,15 +19,16 @@ app.all('*', (req, res) => {                                // Handle all incomi
   let bodyText = (req.body) ? req.body : '[No body]';
   console.log('Raw Body:', bodyText);
 
+
   // Set Content-Type for response to match the original request's content-type 
   res.setHeader('Content-Type', req.headers['content-type'] || 'text/plain');
 
-  
   // Send back a response echoing the received data
   // res.send(`Received data:\n${JSON.stringify(bodyText)}`);
   res.send(`Received data: ${bodyText}`);
+  
 });
 
 app.listen(PORT, () => {
-  console.log(`Microservice C running at http://localhost:${PORT}`);
+  console.log(`Server B running at http://localhost:${PORT}`);
 });

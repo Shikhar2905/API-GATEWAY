@@ -1,12 +1,14 @@
-const mongoose = require('mongoose');
+// Establish connection with the database
+const mysql = require('mysql2/promise');
 
-const connectDB = async () => {
-  try {
-    await mongoose.connect('mongodb://127.0.0.1:27017/Proxy-Microservice');
-    console.log("Connected to MongoDB");
-  } catch (error) {
-    console.error("DB connection error:", error.message);
-  }
-};
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'root',
+  password: '12345', 
+  database: 'proxy_microservice',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
-module.exports = connectDB;
+module.exports = pool;

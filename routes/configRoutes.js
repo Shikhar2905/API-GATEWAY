@@ -1,102 +1,105 @@
 const express = require('express');
+const pool = require('../dbConfig');                                        // MySQL connection pool
+const redisClient = require('../redisClient');                              // Redis client instance
+const authMiddleware = require('../middleware/auth');                       // Middleware to protect routes
 const router = express.Router();
-const serviceconfigs = require('../models/ServiceConfig');
-const redisClient = require('../redisClient');
 
-// GET all configurations using Redis
-router.get('/', async (req, res) => {
+
+// GET all service configurations (with Redis cache)
+router.get('/', authMiddleware, async (req, res) => {
   try {
-    console.time("FetchConfigs");
+    const cached = await redisClient.get('serviceconfigs');                 // Try fetching from Redis cache
+    if (cached) return res.json(JSON.parse(cached));                        // If cached, return it
 
-    const cachedData = await redisClient.get('serviceconfigs');
+    const [rows] = await pool.query('SELECT * FROM serviceconfigs');        // If not in cache, fetch from DB
 
-    if (cachedData) {
-      console.timeEnd("FetchConfigs");
-      console.log("Returned from Redis Cache");
-      return res.status(200).json(JSON.parse(cachedData));
-    }
+    await redisClient.setEx('serviceconfigs', 60, JSON.stringify(rows));    // Cache the result for 60 seconds
 
-    const server_configuration = await serviceconfigs.find();
-
-    await redisClient.setEx('serviceconfigs', 60, JSON.stringify(server_configuration));
-
-    console.timeEnd("FetchConfigs");
-    console.log("Returned from MongoDB");
-    return res.status(200).json(server_configuration);
-
+    res.json(rows);
   } catch (err) {
-    console.error("Error:", err.message);
-    return res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// GET one config by ID 
-router.get('/:id', async (req, res) => {
+
+// GET a specific service configuration by ID (with Redis cache)
+router.get('/:id', authMiddleware, async (req, res) => {
+  const id = req.params.id;
+
   try {
-    const id = req.params.id;
+    const cached = await redisClient.get(`serviceconfig:${id}`);                            // Try fetching specific config from Redis
+    if (cached) return res.json(JSON.parse(cached));                                        // Return if cached
 
-    const cachedConfig = await redisClient.get(`serviceconfig:${id}`);
-    if (cachedConfig) return res.json(JSON.parse(cachedConfig));
+    const [rows] = await pool.query('SELECT * FROM serviceconfigs WHERE id = ?', [id]);     // If not cached, query DB
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
 
-    const server_configuration = await serviceconfigs.findById(id);
-    if (!server_configuration) return res.status(404).json({ error: 'Not found' });
-
-    await redisClient.setEx(`serviceconfig:${id}`, 60, JSON.stringify(server_configuration));
-    res.json(server_configuration);
+    
+    await redisClient.setEx(`serviceconfig:${id}`, 60, JSON.stringify(rows[0]));            // Cache the result for 60 seconds
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// CREATE new config
-router.post('/', async (req, res) => {
+
+// POST - Create a new service configuration
+router.post('/', authMiddleware, async (req, res) => {
+  const { prefix, target, windowMS, maxRequests } = req.body;
+
   try {
-    const newConfig = new serviceconfigs(req.body);
-    await newConfig.save();
+    const [result] = await pool.query(
+      'INSERT INTO serviceconfigs (prefix, target, windowMS, maxRequests) VALUES (?, ?, ?, ?)',
+      [prefix, target, windowMS, maxRequests]
+    );
+   
+    await redisClient.del('serviceconfigs');                                                // Clear the cache for all service configs
 
-    // Invalidate or update the cache
-    await redisClient.del('serviceconfigs');
-
-    res.status(201).json(newConfig);
+    res.status(201).json({ id: result.insertId, prefix, target, windowMS, maxRequests });
   } catch (err) {
     res.status(400).json({ error: 'Invalid input' });
   }
 });
 
-// UPDATE config
-router.put('/:id', async (req, res) => {
+
+// PUT - Update a service configuration by ID
+router.put('/:id', authMiddleware, async (req, res) => {
+  const { prefix, target, windowMS, maxRequests } = req.body;
+  const id = req.params.id;
+
   try {
-    const id = req.params.id;
-    const updated = await serviceconfigs.findByIdAndUpdate(id, req.body, { new: true });
+    const [result] = await pool.query(
+      'UPDATE serviceconfigs SET prefix = ?, target = ?, windowMS = ?, maxRequests = ? WHERE id = ?',
+      [prefix, target, windowMS, maxRequests, id]
+    );
 
-    if (!updated) return res.status(404).json({ error: 'Not found' });
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
 
-    // Invalidate global and specific cache
-    await redisClient.del('serviceconfigs');
+    await redisClient.del('serviceconfigs');                                               // Invalidate the updated cache entries
     await redisClient.del(`serviceconfig:${id}`);
 
-    res.json(updated);
+    res.json({ message: 'Updated successfully' });
   } catch (err) {
     res.status(400).json({ error: 'Invalid update' });
   }
 });
 
-// DELETE config
-router.delete('/:id', async (req, res) => {
+
+// DELETE - Remove a service configuration by ID
+router.delete('/:id', authMiddleware, async (req, res) => {
+  const id = req.params.id;
+
   try {
-    const id = req.params.id;
-    const deleted = await serviceconfigs.findByIdAndDelete(id);
+    const [result] = await pool.query('DELETE FROM serviceconfigs WHERE id = ?', [id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Not found' });
 
-    if (!deleted) return res.status(404).json({ error: 'Not found' });
-
-    // Invalidate global and specific cache
-    await redisClient.del('serviceconfigs');
+    await redisClient.del('serviceconfigs');                                                // Invalidate cache after deletion
     await redisClient.del(`serviceconfig:${id}`);
 
     res.json({ message: 'Deleted successfully' });
   } catch (err) {
-    res.status(500).send('Delete operation failed! Id not found');
+    res.status(500).send('Delete operation failed');
   }
 });
+
 
 module.exports = router;
