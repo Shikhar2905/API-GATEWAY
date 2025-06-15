@@ -3,7 +3,8 @@ const bcrypt = require('bcrypt');                                        // For 
 const jwt = require('jsonwebtoken');                                     // For generating and verifying JWT tokens
 const pool = require('../dbConfig');                                     // MySQL connection pool
 const router = express.Router();
-const JWT_SECRET = 'your_jwt_secret';
+require('dotenv').config();
+const JWT_SECRET = process.env.JWT_SECRET;
 
 
 // User Signup Route

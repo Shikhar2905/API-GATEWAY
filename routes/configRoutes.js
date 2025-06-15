@@ -8,13 +8,20 @@ const router = express.Router();
 // GET all service configurations (with Redis cache)
 router.get('/', authMiddleware, async (req, res) => {
   try {
+    console.time("FetchConfigs");
     const cached = await redisClient.get('serviceconfigs');                 // Try fetching from Redis cache
-    if (cached) return res.json(JSON.parse(cached));                        // If cached, return it
+    if (cached) {
+      console.timeEnd("FetchConfigs");
+      console.log("Returned from Redis Cache");
+      return res.json(JSON.parse(cached));                        // If cached, return it
+    }
 
     const [rows] = await pool.query('SELECT * FROM serviceconfigs');        // If not in cache, fetch from DB
 
     await redisClient.setEx('serviceconfigs', 60, JSON.stringify(rows));    // Cache the result for 60 seconds
 
+    console.timeEnd("FetchConfigs");
+    console.log("Returned from MySQL");
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: "Internal server error" });

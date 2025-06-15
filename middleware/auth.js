@@ -1,5 +1,6 @@
-const jwt = require('jsonwebtoken');                                            // Import the jsonwebtoken package to verify JWT tokens
-const JWT_SECRET = 'your_jwt_secret';                                           // Secret key used to sign and verify JWT tokens
+const jwt = require('jsonwebtoken');     
+require('dotenv').config();                                       // Import the jsonwebtoken package to verify JWT tokens
+const JWT_SECRET = process.env.JWT_SECRET;                                           // Secret key used to sign and verify JWT tokens
 
 // Middleware function to authenticate incoming requests
 const authenticateUser = (req, res, next) => {
