@@ -33,20 +33,45 @@ app.use('/client/service-env', serviceEnvRoutes);
 // Gateway overview (admin)
 app.use('/gateway', gatewayRoutes);
 
-// Dynamically setup routing for services
+
+// Dynamic proxy with request logging
 (async () => {
+  // Fetch active service_env entries
   const [configs] = await pool.query(
-    `SELECT se.base_url, se.target_url, se.port, se.rate_limit, se.window_ms
-     FROM service_env se WHERE se.is_active=1`
+    `SELECT service_env_id, base_url, target_url, port, rate_limit, window_ms
+     FROM service_env WHERE is_active=1`
   );
 
   configs.forEach(cfg => {
+    const { service_env_id, base_url, target_url, port, rate_limit, window_ms } = cfg;
+
+    // Middleware to log to DB after response
+    const logRequest = (req, res, next) => {
+      const start = Date.now();
+      res.on('finish', async () => {
+        const duration = Date.now() - start;
+        try {
+          await pool.query(
+            `INSERT INTO logs
+              (service_env_id, ip_address, method, path, status_code, response_time_ms)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [service_env_id, req.ip || req.connection.remoteAddress, req.method, req.originalUrl, res.statusCode, duration]
+          );
+        } catch (logErr) {
+          console.error('Failed to insert log:', logErr);
+        }
+      });
+      next();
+    };
+
+    // Register proxy route
     app.use(
-      cfg.base_url,
-      bodyParser.raw({ type: '*/*' }),
-      jwtAuth,
-      rateLimit({ windowMs: cfg.window_ms, max: cfg.rate_limit }),
-      proxy(`${cfg.target_url}:${cfg.port}`)
+      base_url,                                             // Route prefix
+      bodyParser.raw({ type: '*/*' }),                       // Raw body parser
+      jwtAuth,                                               // Verify JWT
+      rateLimit({ windowMs: window_ms, max: rate_limit }),    // Rate limiting
+      logRequest,                                            // Log to DB
+      proxy(`${target_url}:${port}`)                         // Forward request
     );
   });
 })();
