@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-
 // Establish connection with the database
 const mysql = require('mysql2/promise');
 

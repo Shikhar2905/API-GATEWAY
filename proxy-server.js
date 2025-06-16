@@ -51,8 +51,6 @@ app.use('/gateway', gatewayRoutes);
       proxy(`${cfg.target_url}:${cfg.port}`)
     );
   });
-
-  // fallback, etc.
 })();
 
 

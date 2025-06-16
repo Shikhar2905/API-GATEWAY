@@ -22,21 +22,6 @@ router.post('/signup', async (req, res) => {
 });
 
 // Client Login
-// router.post('/login', async (req, res) => {
-//   const { email, password } = req.body;
-//   try {
-//     const [rows] = await pool.query('SELECT * FROM client WHERE email = ?', [email]);
-//     const clientRec = rows[0];
-//     if (!clientRec) return res.status(404).json({ error: 'Client not found' });
-//     const ok = await bcrypt.compare(password, clientRec.password);
-//     if (!ok) return res.status(401).json({ error: 'Wrong password' });
-//     const token = jwt.sign({ clientId: clientRec.client_id }, JWT_SECRET, { expiresIn: '2h' });
-//     res.json({ token });
-//   } catch (err) {
-//     res.status(500).json({ error: 'Login error' });
-//   }
-// });
-
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
