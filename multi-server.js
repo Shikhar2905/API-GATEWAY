@@ -25,6 +25,7 @@ const pool       = require('./dbConfig');      // your MySQL pool
     app.all('*', (req, res) => {
       console.log(`[${port}]  ${req.method} ${req.originalUrl}`);
       console.log('Headers:', req.headers);
+      console.log('Query Params: ', req.query)
       console.log('Body:', req.body.toString() || '[empty]');
       res.setHeader('Content-Type', req.headers['content-type'] || 'text/plain');
       res.send(`From port ${port} (base ${base_url}): ` +

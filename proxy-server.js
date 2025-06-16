@@ -3,12 +3,10 @@ const proxy = require('express-http-proxy');           // For forwarding request
 const rateLimit = require('express-rate-limit');       // Rate limiting middleware
 const bodyParser = require('body-parser');             // To handle raw request bodies
 const pool = require('./dbConfig');                    // MySQL DB connection pool
-const redisClient = require('./redisClient');          // Redis client
 const jwtAuth = require('./middleware/auth');          // JWT middleware for end-user auth
 
 // Routers
 const userRoutes = require('./routes/userRoutes');
-const configRoutes = require('./routes/configRoutes');
 const clientRoutes = require('./routes/clientRoutes');
 const microserviceRoutes = require('./routes/microserviceRoutes');
 const environmentRoutes = require('./routes/environmentRoutes');
